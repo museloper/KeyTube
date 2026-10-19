@@ -72,7 +72,8 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 
 ## 운영 메모
 
-- 원격 저장소: 아직 없음. 만들면 LoopTube처럼 GitHub Pages 배포(`.github/workflows/deploy.yml`, `basePath`는 `PAGES_BASE_PATH` 환경변수 — 하드코딩 금지).
+- 원격 저장소: `origin` → https://github.com/museloper/KeyTube.git (`main` 추적).
+- **배포는 GitHub Pages.** `main`에 push하면 `.github/workflows/deploy.yml`이 typecheck→lint→test→build→배포를 자동 수행한다. 배포 주소: https://museloper.github.io/KeyTube/ (Pages Source: GitHub Actions — `gh api`로 설정 완료). `basePath`는 `PAGES_BASE_PATH` 환경변수로만 받는다 — 하드코딩 금지. 런타임에 URL로 여는 것(vendor 모듈, `/engine`)은 `src/lib/paths.ts`가 `NEXT_PUBLIC_BASE_PATH`로 직접 붙인다.
 - CI의 `npx next typegen` 단계를 지우지 말 것 (클린 체크아웃에서 `LayoutProps` 타입 에러). lockfile이 CI에서 `npm ci` EUSAGE를 내면 `rm -rf node_modules package-lock.json && npm install`로 재생성. (LoopTube에서 겪은 문제)
 - 강조색은 LoopTube(emerald)와 구분해 **violet**을 쓴다.
 
