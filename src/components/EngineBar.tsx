@@ -5,7 +5,7 @@ import type { UseEngineResult } from "@/hooks/useEngine";
 const smallButton =
   "shrink-0 rounded-lg bg-neutral-800 px-3 py-2 text-xs text-neutral-200 transition hover:bg-neutral-700";
 
-/** Connection state of the engine popup, which is what actually changes the sound. */
+/** Connection state of the engine tab, which is what actually changes the sound. */
 export function EngineBar({ engine }: { engine: UseEngineResult }) {
   const { status, latencyMs, error, supported, open, close } = engine;
 
@@ -35,11 +35,11 @@ export function EngineBar({ engine }: { engine: UseEngineResult }) {
       ) : status === "waiting" ? (
         <>
           <p className="text-sm leading-relaxed text-neutral-300">
-            엔진 창에서 <b>메인 탭 연결</b>을 누르고, 공유 창에서 <b>&lsquo;KeyTube ← 이 탭을 선택&rsquo;</b>을 고르세요.
+            엔진 탭에서 <b>메인 탭 연결</b>을 누르고, 공유 창에서 <b>&lsquo;KeyTube ← 이 탭을 선택&rsquo;</b>을 고르세요.
           </p>
           <span className="flex shrink-0 gap-1.5">
             <button type="button" onClick={open} className={smallButton}>
-              창 보기
+              엔진 탭 보기
             </button>
             <button type="button" onClick={close} className={smallButton}>
               취소

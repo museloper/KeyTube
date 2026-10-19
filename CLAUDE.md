@@ -10,20 +10,22 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 |---|---|
 | `src/lib/engine/` | **프레임워크 무관 오디오 엔진** — 키 이론(`theory.ts`), 탭 캡처(`capture.ts`), 피치 시프트(`pitchShifter.ts`), 캡처→시프트→출력 묶음(`session.ts`), 메인↔엔진 창 메시지(`link.ts`), 레벨 계산(`meter.ts`) |
 | `src/lib/youtube/` | IFrame API 로더·타입·URL 파서·oEmbed (LoopTube에서 복사) |
-| `src/hooks/usePlayer.ts` / `useEngine.ts` | YouTube 플레이어 생성·로드 / 엔진 팝업 열기·상태·반음 전달 |
+| `src/hooks/usePlayer.ts` / `useEngine.ts` | YouTube 플레이어 생성·로드 / 엔진 탭 열기·상태·반음 전달 |
 | `src/components/` | 화면 부품 (`KeyPanel`, `EngineBar`, `UrlInput`, `Player`) |
 | `src/app/page.tsx` | 메인 화면: 플레이어 + 키 컨트롤 (소리는 내지 않음) |
-| `src/app/engine/` | **엔진 팝업**: 메인 탭을 캡처해 키를 바꿔 출력 |
+| `src/app/engine/` | **엔진 탭**: 메인 탭을 캡처해 키를 바꿔 출력 |
 | `src/app/debug/` | 탭 캡처 검증 페이지 (`/debug`, `/debug/player`) |
 | `src/lib/paths.ts` | basePath를 붙인 런타임 URL (vendor 모듈, 엔진 페이지) |
 
-## 두 창 구조 (메인 + 엔진 팝업)
+## 두 탭 구조 (메인 탭 + 엔진 탭)
 
-자기 탭 캡처가 불가능해서(아래 "플랫폼 제약") 소리 처리를 팝업으로 분리했다. 메인 탭은 LoopTube처럼 플레이어와 컨트롤을 한 화면에 두고, **엔진 팝업(`/engine`)이 메인 탭을 캡처해 시프트된 소리를 낸다.** 메인 탭 원음은 `suppressLocalAudioPlayback`으로 꺼진다.
+자기 탭 캡처가 불가능해서(아래 "플랫폼 제약") 소리 처리를 별도 탭으로 분리했다. 메인 탭은 LoopTube처럼 플레이어와 컨트롤을 한 화면에 두고, **엔진 탭(`/engine`)이 메인 탭을 캡처해 시프트된 소리를 낸다.** 메인 탭 원음은 `suppressLocalAudioPlayback`으로 꺼진다. 공유가 시작되면 Chrome이 캡처된 탭(메인)으로 자동 전환해 준다.
+
+- **엔진은 반드시 일반 새 탭으로 연다(`window.open(url, name)`, 크기 지정 없음).** 크기를 지정한 팝업 창에서 `getDisplayMedia`를 부르면 **Chrome 공유 창의 탭 목록이 통째로 비어서** 메인 탭을 고를 수 없다 (옵션과 무관, 실측). 사용자 보고로 발견됨.
 
 - 통신은 `BroadcastChannel("keytube-engine")` (`link.ts`). **반음 값의 원본은 메인 탭**이고, 엔진이 연결되거나 다시 발견될 때마다 메인이 현재 값을 보낸다. 메인 탭을 새로고침해도 캡처는 이어지고, `hello`로 엔진을 다시 찾는다.
-- 엔진 대기 중에는 메인 탭 제목을 `KeyTube ← 이 탭을 선택`으로 바꿔 공유 창에서 고르기 쉽게 한다. 팝업은 자기 제목(`KeyTube 엔진`)을 갖고 `selfBrowserSurface: "exclude"`로 목록에서 빠진다.
-- 팝업을 닫으면 캡처가 끝나고 Chrome이 원음 차단을 풀어 **자연스럽게 원래 소리로 돌아간다** — 별도 복구 코드 불필요.
+- 엔진 대기 중에는 메인 탭 제목을 `KeyTube ← 이 탭을 선택`으로 바꿔 공유 창에서 고르기 쉽게 한다. 엔진 탭은 자기 제목(`KeyTube 엔진`)을 갖고 `selfBrowserSurface: "exclude"`로 목록에서 빠진다.
+- 엔진 탭을 닫으면 캡처가 끝나고 Chrome이 원음 차단을 풀어 **자연스럽게 원래 소리로 돌아간다** — 별도 복구 코드 불필요.
 
 ## 절대 바꾸면 안 되는 전제
 
@@ -42,18 +44,20 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 ## 라이브러리 선택
 
 - 피치 시프트: **`signalsmith-stretch`** (MIT, WASM+AudioWorklet, 라이브 입력 지원, 지연 120 ms). 타입이 없어 `src/lib/engine/signalsmith-stretch.d.ts`로 선언했다.
+  - `schedule()`에 `output`을 넘기지 말 것: README와 달리 worklet은 시점 비교에 `outputTime`(없으면 자기 시계)을 쓰고 `output`은 그대로 저장만 해서 두 값이 어긋난다.
   - **절대 `import "signalsmith-stretch"`로 번들에 넣지 말 것.** 자기 소스를 문자열로 worklet에 넘기는데 Turbopack의 치환 코드가 worklet 안에서 ReferenceError를 내고, 오류 없이 영원히 멈춘다. `scripts/copy-vendor.mjs`가 `predev`/`prebuild`에서 `public/vendor/`로 복사하고(gitignore됨), `createPitchShifter(context, STRETCH_MODULE_URL)`(`src/lib/paths.ts`)이 `webpackIgnore` 동적 import로 불러온다. 패키지를 올리면 이 복사본도 자동으로 따라간다. (경위: `docs/decisions.md`)
 - **GPL 라이브러리(Rubber Band 등)는 쓰지 않는다.**
 
 ## 테스트가 못 검증하는 것
 
-`npx vitest run`은 순수 로직(`theory`, `meter`, `parseUrl`)만 검증한다. 캡처·피치 시프트는 **로컬 Chrome(`/Applications/Google Chrome.app`)을 playwright-core로 headed 구동**하면 수치로 검증할 수 있다 — `--auto-accept-this-tab-capture`(이 탭) / `--auto-select-tab-capture-source-by-title=<제목>`(다른 탭)으로 공유 창을 자동 승인하고, `<audio>` 톤을 대조군으로 넣어 `/debug`의 레벨·피드백 테스트를 읽는다. 엔진 팝업의 실제 출력은 `AudioNode.prototype.connect`를 init script로 감싸 destination 앞에 분석기를 꽂아 주파수를 잰다. **자동 선택 플래그는 한글/특수문자 제목을 못 맞추므로** 테스트에서는 메인 탭 제목을 ASCII로 덮어쓸 것. **headless는 탭 오디오를 전혀 캡처하지 않아(무음) 판정이 무효다.** 실제 음질과 영상-소리 싱크 체감은 여전히 사람이 들어봐야 한다.
+`npx vitest run`은 순수 로직(`theory`, `meter`, `parseUrl`)만 검증한다. 캡처·피치 시프트는 **로컬 Chrome(`/Applications/Google Chrome.app`)을 playwright-core로 headed 구동**하면 수치로 검증할 수 있다 — `--auto-accept-this-tab-capture`(이 탭) / `--auto-select-tab-capture-source-by-title=<제목>`(다른 탭)으로 공유 창을 자동 승인하고, `<audio>` 톤을 대조군으로 넣어 `/debug`의 레벨·피드백 테스트를 읽는다. 엔진 탭의 실제 출력은 `AudioNode.prototype.connect`를 init script로 감싸 destination 앞에 분석기를 꽂아 주파수를 잰다. **자동 선택 플래그는 한글/특수문자 제목을 못 맞추므로** 테스트에서는 메인 탭 제목을 ASCII로 덮어쓸 것. **자동 선택 플래그는 공유 창 UI 자체를 건너뛰므로 공유 창에 무엇이 보이는지는 검증하지 못한다** — 플래그 없이 띄우고 macOS `screencapture -x`로 화면을 찍어 확인할 것 (빈 탭 목록 버그를 이렇게 놓쳤다).
+- 반음 변경은 0.3초 안팎에 반영된다. FFT로 잴 때는 분석 창 길이(fftSize/sampleRate)만큼 이전 소리가 섞이니, 한 번 읽고 판정하지 말고 목표 주파수에 도달할 때까지 폴링할 것. **headless는 탭 오디오를 전혀 캡처하지 않아(무음) 판정이 무효다.** 실제 음질과 영상-소리 싱크 체감은 여전히 사람이 들어봐야 한다.
 
 ## 진행 단계
 
 - [x] 0. 스캐폴딩, 키 이론 모듈, `/debug` 캡처 검증 페이지
 - [x] 1. `/debug` 검증 — 이 탭 캡처 불가, 다른 탭 캡처 동작 확인
-- [x] 1.5. 메인 + 엔진 팝업 구조로 확정·구현 (자동 e2e로 ±반음 출력 주파수 확인)
+- [x] 1.5. 메인 탭 + 엔진 탭 구조로 확정·구현 (자동 e2e로 ±반음 출력 주파수 확인)
 - [ ] 2. 키 판별 (크로마 + Krumhansl 프로파일)
 - [ ] 3. 파일 업로드(C)로 엔진 완성
 - [ ] 4. 메인 화면 다듬기 (단축키, 영상별 마지막 키 기억)

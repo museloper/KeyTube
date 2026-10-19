@@ -8,7 +8,7 @@ import { formatSemitones } from "@/lib/engine/theory";
 import { STRETCH_MODULE_URL } from "@/lib/paths";
 
 /**
- * The engine popup. It captures the main KeyTube tab and plays the shifted
+ * The engine tab. It captures the main KeyTube tab and plays the shifted
  * copy from here — the main tab can't do it itself, because a tab that
  * captures itself also silences and re-captures its own output.
  */
@@ -55,7 +55,7 @@ export default function EnginePage() {
     linkRef.current = link;
     link.post(statusRef.current);
 
-    // Closing the popup ends the capture, which lifts Chrome's suppression:
+    // Closing this tab ends the capture, which lifts Chrome's suppression:
     // the main tab simply goes back to its original sound.
     const onPageHide = () => {
       stopSession();
@@ -108,7 +108,7 @@ export default function EnginePage() {
             <span className="h-2 w-2 rounded-full bg-violet-400" /> 키 조절 중 · 지연 {latencyMs} ms
           </p>
           <p className="text-xs leading-relaxed text-neutral-500">
-            이 창은 최소화해도 됩니다. 닫으면 원래 소리로 돌아가요.
+            이 탭은 열어 둔 채 메인 탭으로 돌아가세요. 닫으면 원래 소리로 돌아가요.
           </p>
           <button
             type="button"

@@ -38,7 +38,9 @@ export async function createPitchShifter(context: AudioContext, moduleUrl: strin
     input: node,
     output: node,
     setSemitones(semitones) {
-      void node.schedule({ semitones, output: context.currentTime });
+      // No `output` time: the worklet compares against its own clock but
+      // stores whatever is passed, so leaving it out keeps the two consistent.
+      void node.schedule({ semitones });
     },
     latency: () => node.latency(),
     dispose() {

@@ -93,8 +93,10 @@ export function useEngine(semitones: number): UseEngineResult {
   }, [status]);
 
   const open = useCallback(() => {
-    // Reuses the existing popup (same name) instead of stacking new ones.
-    const popup = window.open(ENGINE_PAGE_URL, POPUP_NAME, "popup,width=380,height=320");
+    // A normal tab, not a sized popup window: Chrome's share picker opened
+    // from a popup window lists no tabs at all. The name reuses an existing
+    // engine tab instead of stacking new ones.
+    const popup = window.open(ENGINE_PAGE_URL, POPUP_NAME);
     if (!popup) {
       setStatus("error");
       setError("팝업이 차단됐어요. 주소창의 팝업 차단 아이콘에서 허용해 주세요.");

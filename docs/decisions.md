@@ -27,8 +27,15 @@
 - 원인: 이 라이브러리는 자기 함수 소스를 문자열로 만들어 AudioWorklet 모듈로 등록한다. Turbopack이 `typeof process == "object"`를 `typeof __TURBOPACK__imported__module__…["default"] == "object"`로 바꿔 넣는데, worklet 안에는 그 변수가 없어 **ReferenceError**가 나고, 라이브러리가 이를 삼켜 'ready'를 영영 보내지 않는다.
 - 해결: `scripts/copy-vendor.mjs`가 `predev`/`prebuild`에서 원본을 `public/vendor/`로 복사하고, `createPitchShifter(context, moduleUrl)`이 `import(/* webpackIgnore: true */ url)`로 런타임에 불러온다. URL을 인자로 받는 건 엔진이 Next.js의 basePath를 몰라도 되게 하고, 확장(B)이 자기 경로를 넘길 수 있게 하기 위함.
 
-## 2026-10-19 — 화면 구조: 메인 탭 + 엔진 팝업
+## 2026-10-19 — 화면 구조: 메인 탭 + 엔진 팝업 (→ 같은 날 엔진 탭으로 변경, 아래)
 
 - 후보: (1) 메인 탭(플레이어+컨트롤) + 소리를 내는 작은 엔진 팝업, (2) 컨트롤 탭 + 플레이어 팝업. 사용자가 (1)을 선택 — LoopTube처럼 영상과 컨트롤이 한 화면에 있는 게 핵심 UX라서.
 - 팝업은 최소화해도 되고, 닫으면 Chrome이 원음 차단을 풀어 원래 소리로 돌아가는 게 자연스러운 "끄기" 동작이 된다.
 - 자동 e2e(headed Chrome): 440 Hz 대조 톤 → 엔진 출력 원키 440.1 / +2 495.3 / −1 415.9 Hz. 메인 새로고침 후 재연결, 팝업 닫으면 메인이 "꺼짐"으로 전환 확인.
+
+## 2026-10-19 — 엔진을 팝업 창이 아니라 일반 탭으로
+
+- 사용자 보고: 엔진 팝업에서 공유 창을 열면 'Chrome 탭' 목록이 비어 있어 고를 탭이 없었다.
+- 재현(플래그 없이 headed Chrome + `screencapture`): 크기 지정 팝업 창에서 호출하면 최소 옵션(`{video:true, audio:true}`)으로도 탭 목록이 비고, 일반 탭에서 호출하면 다른 탭이 정상 표시된다. 옵션 문제가 아니라 Chrome의 팝업 창 처리 방식.
+- 해결: `window.open(url, "keytube-engine")`(기능 문자열 없음)으로 새 탭에 연다. 공유 창에는 엔진 자신이 빠지고 `KeyTube ← 이 탭을 선택` 하나만 보이며, 공유가 시작되면 Chrome이 메인 탭으로 자동 전환한다.
+- 놓친 이유: e2e가 `--auto-select-tab-capture-source-by-title`로 공유 창을 건너뛰었다. 공유 창 UI는 스크린샷으로 따로 확인해야 한다.
