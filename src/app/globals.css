@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: #0a0a0a;
+  color: #ededed;
+  /* Stop the page from bouncing on mobile while controls are being tapped. */
+  overscroll-behavior-y: contain;
+}
+
+/* The key buttons get tapped in quick succession; without this,
+   mobile browsers read two taps as a double-tap zoom. In the base layer so a
+   touch-* utility on an element still wins. */
+@layer base {
+  button {
+    touch-action: manipulation;
+  }
+}
