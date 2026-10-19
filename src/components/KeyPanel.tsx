@@ -1,17 +1,27 @@
 "use client";
 
 import { useState } from "react";
+import type { Confidence, KeyEstimate } from "@/lib/engine/keyDetect";
 import { formatSemitones, keyLabel, parseKey, relativeKey, transposeKey, type Key } from "@/lib/engine/theory";
 
 export const MAX_SHIFT = 12;
 
+const CONFIDENCE_LABEL: Record<Confidence, string> = { low: "낮음", medium: "보통", high: "높음" };
+
 interface KeyPanelProps {
-  originalKey: Key | null;
-  onOriginalKeyChange: (key: Key | null) => void;
+  /** From the engine; null when nothing has been heard (or the engine is off). */
+  estimate: KeyEstimate | null;
+  /** Whether there is an engine listening at all, to explain an empty estimate. */
+  listening: boolean;
+  /** Set by the user; overrides the estimate. */
+  manualKey: Key | null;
+  onManualKeyChange: (key: Key | null) => void;
   semitones: number;
   onSemitonesChange: (semitones: number) => void;
   disabled?: boolean;
 }
+
+const sameKey = (a: Key, b: Key) => a.tonic === b.tonic && a.mode === b.mode;
 
 function KeyName({ value, caption }: { value: Key | null; caption: string }) {
   const label = value ? keyLabel(value) : null;
@@ -27,33 +37,65 @@ function KeyName({ value, caption }: { value: Key | null; caption: string }) {
   );
 }
 
-export function KeyPanel({ originalKey, onOriginalKeyChange, semitones, onSemitonesChange, disabled }: KeyPanelProps) {
+const chipClass =
+  "rounded-full bg-neutral-800 px-3 py-1 text-xs text-neutral-200 transition hover:bg-neutral-700";
+
+export function KeyPanel({
+  estimate,
+  listening,
+  manualKey,
+  onManualKeyChange,
+  semitones,
+  onSemitonesChange,
+  disabled,
+}: KeyPanelProps) {
   const [draft, setDraft] = useState("");
   const [invalid, setInvalid] = useState(false);
+
+  const detected = estimate?.candidates[0]?.key ?? null;
+  const originalKey = manualKey ?? detected;
   const shifted = originalKey ? transposeKey(originalKey, semitones) : null;
+  const alternatives = (estimate?.candidates ?? [])
+    .map((candidate) => candidate.key)
+    .filter((key) => !originalKey || !sameKey(key, originalKey))
+    .slice(0, 3);
+
+  const caption = manualKey
+    ? "원키 · 직접 지정"
+    : estimate
+      ? `원키 · 자동 판별 (신뢰도 ${CONFIDENCE_LABEL[estimate.confidence]})`
+      : "원키";
 
   const step = (delta: number) =>
     onSemitonesChange(Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, semitones + delta)));
 
   const submitKey = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!draft.trim()) {
-      onOriginalKeyChange(null);
-      setInvalid(false);
-      return;
-    }
     const parsed = parseKey(draft);
     setInvalid(!parsed);
-    if (parsed) onOriginalKeyChange(parsed);
+    if (parsed) {
+      onManualKeyChange(parsed);
+      setDraft("");
+    }
   };
 
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-neutral-900 p-4">
       <div className="flex items-center gap-2">
-        <KeyName value={originalKey} caption="원키" />
+        <KeyName value={originalKey} caption={caption} />
         <span className="text-neutral-600">→</span>
         <KeyName value={shifted} caption={`현재 (${formatSemitones(semitones)})`} />
       </div>
+
+      <p className="text-center text-xs text-neutral-500">
+        {manualKey
+          ? null
+          : estimate
+            ? `${Math.round(estimate.seconds)}초 분석 · 오래 들을수록 정확해져요`
+            : listening
+              ? "원키 분석 중 — 음악을 재생하세요"
+              : "키 조절을 켜면 원키를 자동으로 찾아요"}
+      </p>
 
       <div className="flex items-center justify-center gap-2">
         <button
@@ -83,6 +125,27 @@ export function KeyPanel({ originalKey, onOriginalKeyChange, semitones, onSemito
           +1
         </button>
       </div>
+
+      {(alternatives.length > 0 || manualKey) && (
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
+          {alternatives.length > 0 && <span className="text-xs text-neutral-500">다른 후보</span>}
+          {alternatives.map((key) => (
+            <button
+              key={`${key.tonic}-${key.mode}`}
+              type="button"
+              onClick={() => onManualKeyChange(key)}
+              className={chipClass}
+            >
+              {keyLabel(key).name}
+            </button>
+          ))}
+          {manualKey && (
+            <button type="button" onClick={() => onManualKeyChange(null)} className={chipClass}>
+              자동 판별로 되돌리기
+            </button>
+          )}
+        </div>
+      )}
 
       <form onSubmit={submitKey} className="flex flex-col gap-1.5">
         <div className="flex gap-2">

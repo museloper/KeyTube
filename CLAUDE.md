@@ -8,7 +8,7 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 
 | 경로 | 역할 |
 |---|---|
-| `src/lib/engine/` | **프레임워크 무관 오디오 엔진** — 키 이론(`theory.ts`), 탭 캡처(`capture.ts`), 피치 시프트(`pitchShifter.ts`), 캡처→시프트→출력 묶음(`session.ts`), 메인↔엔진 창 메시지(`link.ts`), 레벨 계산(`meter.ts`) |
+| `src/lib/engine/` | **프레임워크 무관 오디오 엔진** — 키 이론(`theory.ts`), 탭 캡처(`capture.ts`), 피치 시프트(`pitchShifter.ts`), 캡처→시프트→출력 묶음(`session.ts`), 메인↔엔진 탭 메시지(`link.ts`), 키 판별(`keyDetect.ts` 순수 로직 + `keyTracker.ts` 분석기 샘플링), 레벨 계산(`meter.ts`) |
 | `src/lib/youtube/` | IFrame API 로더·타입·URL 파서·oEmbed (LoopTube에서 복사) |
 | `src/hooks/usePlayer.ts` / `useEngine.ts` | YouTube 플레이어 생성·로드 / 엔진 탭 열기·상태·반음 전달 |
 | `src/components/` | 화면 부품 (`KeyPanel`, `EngineBar`, `UrlInput`, `Player`) |
@@ -34,6 +34,13 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 - **Data API v3는 쓰지 않는다.** 제목/썸네일은 oEmbed로 충분하다.
 - **웹(Next.js) 정적 export 단일 코드베이스.** 서버 기능(API 라우트, Server Actions)을 넣으면 GitHub Pages 배포가 깨진다 — 필요해지면 먼저 알릴 것.
 
+## 키 판별
+
+- 엔진 탭이 캡처한 소리를 **피치 시프트 전에** 분석한다(`session.ts`의 `inputAnalyser`). 시프트 후 소리를 분석하면 ± 누를 때마다 "원키"가 따라 움직인다.
+- 100 ms마다 스펙트럼(fftSize 16384)을 12음 크로마로 접어 곡 전체에 누적하고, Krumhansl–Kessler 24개 조 프로파일과 상관계수로 순위를 매긴다. 1초마다 상위 4개 후보를 메인 탭에 보낸다. 새 영상을 불러오면 `resetKey`로 누적을 비운다.
+- **관계조(C major ↔ A minor)·딸림조 혼동은 이 방식의 본질적 한계**라 UI가 "다른 후보" 칩과 직접 지정(`manualKey`가 자동 판별보다 우선)을 제공한다. 정확도를 올리고 싶으면 프로파일 교체(Temperley 등)나 essentia.js를 검토 — 판별 로직은 `keyDetect.test.ts`의 합성 화음 테스트로 회귀를 잡는다.
+- 엔진 탭은 소리를 내는 탭이라 Chrome 백그라운드 타이머 제한에서 제외된다 — 그래서 `setInterval` 샘플링이 백그라운드에서도 돈다.
+
 ## 플랫폼 제약 (버그 아님)
 
 - **YouTube IFrame API에는 피치 조절이 없다.** 배속(`setPlaybackRate`)뿐이다. iframe은 cross-origin이라 Web Audio로 소리를 직접 가져올 수도 없다. 그래서 키 조절·판별은 `getDisplayMedia` 탭 오디오 캡처(A)로만 가능하다.
@@ -58,7 +65,7 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 - [x] 0. 스캐폴딩, 키 이론 모듈, `/debug` 캡처 검증 페이지
 - [x] 1. `/debug` 검증 — 이 탭 캡처 불가, 다른 탭 캡처 동작 확인
 - [x] 1.5. 메인 탭 + 엔진 탭 구조로 확정·구현 (자동 e2e로 ±반음 출력 주파수 확인)
-- [ ] 2. 키 판별 (크로마 + Krumhansl 프로파일)
+- [x] 2. 키 판별 (크로마 + Krumhansl 프로파일) — 합성 음악 e2e로 E♭ major / F♯ minor 확인, 실제 곡 정확도는 미검증
 - [ ] 3. 파일 업로드(C)로 엔진 완성
 - [ ] 4. 메인 화면 다듬기 (단축키, 영상별 마지막 키 기억)
 - [ ] 5. (나중) 모노레포 전환 + 크롬 확장(B)

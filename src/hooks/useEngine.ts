@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isCaptureSupported } from "@/lib/engine/capture";
+import type { KeyEstimate } from "@/lib/engine/keyDetect";
 import { openControllerLink, type Link, type ToEngine } from "@/lib/engine/link";
 import { ENGINE_PAGE_URL } from "@/lib/paths";
 
@@ -11,6 +12,10 @@ export interface UseEngineResult {
   status: EngineStatus;
   latencyMs: number | null;
   error: string | null;
+  /** The engine's running guess at the original key; null until it has heard something. */
+  keyEstimate: KeyEstimate | null;
+  /** A different song started: make the engine forget what it has heard. */
+  resetKey: () => void;
   /** False on mobile and non-Chromium browsers: tab audio capture isn't available. */
   supported: boolean;
   open: () => void;
@@ -33,6 +38,7 @@ export function useEngine(semitones: number): UseEngineResult {
   const [status, setStatus] = useState<EngineStatus>("off");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [keyEstimate, setKeyEstimate] = useState<KeyEstimate | null>(null);
   const [supported, setSupported] = useState(true);
 
   useEffect(() => {
@@ -42,10 +48,15 @@ export function useEngine(semitones: number): UseEngineResult {
 
     let wasRunning = false;
     const link = openControllerLink((message) => {
+      if (message.type === "key") {
+        setKeyEstimate(message.estimate);
+        return;
+      }
       if (message.type === "bye") {
         wasRunning = false;
         setStatus("off");
         setLatencyMs(null);
+        setKeyEstimate(null);
         return;
       }
       setStatus(message.state);
@@ -108,13 +119,19 @@ export function useEngine(semitones: number): UseEngineResult {
     setStatus("waiting");
   }, []);
 
+  const resetKey = useCallback(() => {
+    setKeyEstimate(null);
+    linkRef.current?.post({ type: "resetKey" });
+  }, []);
+
   const close = useCallback(() => {
     linkRef.current?.post({ type: "shutdown" });
     popupRef.current?.close();
     popupRef.current = null;
     setStatus("off");
     setLatencyMs(null);
+    setKeyEstimate(null);
   }, []);
 
-  return { status, latencyMs, error, supported, open, close };
+  return { status, latencyMs, error, keyEstimate, resetKey, supported, open, close };
 }

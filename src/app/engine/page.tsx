@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CaptureError } from "@/lib/engine/capture";
+import type { KeyEstimate } from "@/lib/engine/keyDetect";
+import { trackKey, type KeyTracker } from "@/lib/engine/keyTracker";
 import { openEngineLink, type EngineState, type FromEngine, type Link } from "@/lib/engine/link";
 import { startCaptureSession, type CaptureSession } from "@/lib/engine/session";
-import { formatSemitones } from "@/lib/engine/theory";
+import { formatSemitones, keyLabel } from "@/lib/engine/theory";
 import { STRETCH_MODULE_URL } from "@/lib/paths";
 
 /**
@@ -15,6 +17,9 @@ import { STRETCH_MODULE_URL } from "@/lib/paths";
 export default function EnginePage() {
   const linkRef = useRef<Link<FromEngine> | null>(null);
   const sessionRef = useRef<CaptureSession | null>(null);
+  const trackerRef = useRef<KeyTracker | null>(null);
+  /** Last estimate, replayed to a main tab that reconnects. */
+  const keyRef = useRef<KeyEstimate | null>(null);
   /** The main tab's latest request, applied as soon as a session exists. */
   const semitonesRef = useRef(0);
 
@@ -23,6 +28,7 @@ export default function EnginePage() {
   const [error, setError] = useState<string | null>(null);
   const [semitones, setSemitones] = useState(0);
   const [starting, setStarting] = useState(false);
+  const [estimate, setEstimate] = useState<KeyEstimate | null>(null);
 
   // Mirror into a ref so the channel handler always reports the current status.
   const statusRef = useRef<FromEngine>({ type: "status", state, latencyMs, error });
@@ -32,6 +38,8 @@ export default function EnginePage() {
   }, [state, latencyMs, error]);
 
   const stopSession = useCallback(() => {
+    trackerRef.current?.stop();
+    trackerRef.current = null;
     sessionRef.current?.stop();
     sessionRef.current = null;
   }, []);
@@ -41,6 +49,10 @@ export default function EnginePage() {
       switch (message.type) {
         case "hello":
           link.post(statusRef.current);
+          link.post({ type: "key", estimate: keyRef.current });
+          break;
+        case "resetKey":
+          trackerRef.current?.reset();
           break;
         case "setSemitones":
           semitonesRef.current = message.semitones;
@@ -80,12 +92,19 @@ export default function EnginePage() {
         stretchModuleUrl: STRETCH_MODULE_URL,
         semitones: semitonesRef.current,
         onEnded: () => {
+          trackerRef.current?.stop();
+          trackerRef.current = null;
           sessionRef.current = null;
           setState("waiting");
           setLatencyMs(null);
         },
       });
       setLatencyMs(sessionRef.current.latencyMs);
+      trackerRef.current = trackKey(sessionRef.current.inputAnalyser, (next) => {
+        keyRef.current = next;
+        setEstimate(next);
+        linkRef.current?.post({ type: "key", estimate: next });
+      });
       setState("running");
     } catch (caught) {
       setState("error");
@@ -106,6 +125,10 @@ export default function EnginePage() {
         <>
           <p className="flex items-center gap-2 text-sm text-violet-300">
             <span className="h-2 w-2 rounded-full bg-violet-400" /> 키 조절 중 · 지연 {latencyMs} ms
+          </p>
+          <p className="text-xs text-neutral-400">
+            원키 분석:{" "}
+            {estimate ? `${keyLabel(estimate.candidates[0]!.key).name} (${Math.round(estimate.seconds)}초 들음)` : "음악을 기다리는 중"}
           </p>
           <p className="text-xs leading-relaxed text-neutral-500">
             이 탭은 열어 둔 채 메인 탭으로 돌아가세요. 닫으면 원래 소리로 돌아가요.

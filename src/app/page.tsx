@@ -14,7 +14,8 @@ export default function Home() {
   const { containerRef, error, load } = usePlayer();
   const [videoId, setVideoId] = useState<string | null>(null);
   const [meta, setMeta] = useState<VideoMeta | null>(null);
-  const [originalKey, setOriginalKey] = useState<Key | null>(null);
+  /** Overrides the engine's estimate when set. */
+  const [manualKey, setManualKey] = useState<Key | null>(null);
   const [semitones, setSemitones] = useState(0);
   const engine = useEngine(semitones);
 
@@ -30,8 +31,9 @@ export default function Home() {
           if (!parsed.videoId) return;
           setVideoId(parsed.videoId);
           setMeta(null);
-          setOriginalKey(null);
+          setManualKey(null);
           setSemitones(0);
+          engine.resetKey();
           fetchVideoMeta(parsed.videoId).then(setMeta);
           load(parsed.videoId, parsed.startSeconds ?? 0);
         }}
@@ -49,8 +51,10 @@ export default function Home() {
       <EngineBar engine={engine} />
 
       <KeyPanel
-        originalKey={originalKey}
-        onOriginalKeyChange={setOriginalKey}
+        estimate={engine.keyEstimate}
+        listening={engine.status === "running"}
+        manualKey={manualKey}
+        onManualKeyChange={setManualKey}
         semitones={semitones}
         onSemitonesChange={setSemitones}
       />

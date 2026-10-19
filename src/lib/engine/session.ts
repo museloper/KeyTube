@@ -1,4 +1,5 @@
 import { captureTabAudio, type CaptureTarget } from "./capture";
+import { KEY_FFT_SIZE } from "./keyTracker";
 import { createPitchShifter } from "./pitchShifter";
 
 /** Capture → pitch shift → speakers, as one unit that cleans up after itself. */
@@ -6,6 +7,8 @@ export interface CaptureSession {
   setSemitones(semitones: number): void;
   /** Delay the shifter adds, in milliseconds. */
   latencyMs: number;
+  /** Taps the captured audio *before* the shift, for key detection. */
+  inputAnalyser: AnalyserNode;
   stop(): void;
 }
 
@@ -34,7 +37,10 @@ export async function startCaptureSession(options: StartOptions): Promise<Captur
 
     const shifter = await createPitchShifter(context, options.stretchModuleUrl);
     shifter.setSemitones(options.semitones ?? 0);
-    context.createMediaStreamSource(stream).connect(shifter.input);
+    const source = context.createMediaStreamSource(stream);
+    source.connect(shifter.input);
+    const inputAnalyser = new AnalyserNode(context, { fftSize: KEY_FFT_SIZE, smoothingTimeConstant: 0 });
+    source.connect(inputAnalyser);
     shifter.output.connect(context.destination);
     const latencyMs = Math.round((await shifter.latency()) * 1000);
 
@@ -51,7 +57,7 @@ export async function startCaptureSession(options: StartOptions): Promise<Captur
       options.onEnded?.();
     });
 
-    return { setSemitones: shifter.setSemitones, latencyMs, stop };
+    return { setSemitones: shifter.setSemitones, latencyMs, inputAnalyser, stop };
   } catch (error) {
     // A failure after capture would otherwise leave the captured tab silenced.
     stream?.getTracks().forEach((track) => track.stop());

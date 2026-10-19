@@ -1,5 +1,7 @@
+import type { KeyEstimate } from "./keyDetect";
+
 /**
- * Messages between the main tab (player + controls) and the engine popup
+ * Messages between the main tab (player + controls) and the engine tab
  * (capture + shift + output). They have to be separate tabs: see
  * docs/decisions.md. BroadcastChannel reaches every same-origin tab, so a
  * reloaded main tab finds a still-running engine again.
@@ -15,11 +17,15 @@ export type ToEngine =
   /** Asks the engine to report its status. */
   | { type: "hello" }
   | { type: "setSemitones"; semitones: number }
+  /** A different song started: drop the key analysis so far. */
+  | { type: "resetKey" }
   | { type: "shutdown" };
 
 export type FromEngine =
   | { type: "status"; state: EngineState; latencyMs: number | null; error: string | null }
-  /** Sent when the popup is closing. */
+  /** Running estimate of the original key; null until something has been heard. */
+  | { type: "key"; estimate: KeyEstimate | null }
+  /** Sent when the engine tab is closing. */
   | { type: "bye" };
 
 const CHANNEL_NAME = "keytube-engine";
