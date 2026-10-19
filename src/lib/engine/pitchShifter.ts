@@ -1,4 +1,4 @@
-import type { StretchNode } from "signalsmith-stretch";
+import type { default as SignalsmithStretchFactory, StretchNode } from "signalsmith-stretch";
 
 /**
  * Real-time pitch shift on any Web Audio source — captured tab (A), decoded
@@ -16,10 +16,17 @@ export interface PitchShifter {
   dispose(): void;
 }
 
-export async function createPitchShifter(context: AudioContext): Promise<PitchShifter> {
-  // Loaded on demand: the module embeds its WASM and touches AudioWorklet,
-  // neither of which exists during the static export's prerender.
-  const { default: SignalsmithStretch } = await import("signalsmith-stretch");
+/**
+ * @param moduleUrl Where the untouched `SignalsmithStretch.mjs` is served.
+ *   It must not go through a bundler: the library stringifies its own code
+ *   into an AudioWorklet, and bundler rewrites break it there (see
+ *   docs/decisions.md). The host decides the URL — the web app serves it from
+ *   public/, an extension would use its own packaged path.
+ */
+export async function createPitchShifter(context: AudioContext, moduleUrl: string): Promise<PitchShifter> {
+  const { default: SignalsmithStretch } = (await import(/* webpackIgnore: true */ moduleUrl)) as {
+    default: typeof SignalsmithStretchFactory;
+  };
   const node: StretchNode = await SignalsmithStretch(context, {
     numberOfInputs: 1,
     numberOfOutputs: 1,

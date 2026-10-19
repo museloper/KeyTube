@@ -9,6 +9,7 @@ import { captureTabAudio, CaptureError, type CaptureTarget } from "@/lib/engine/
 import { binForFrequency, rmsDb, SILENCE_DB } from "@/lib/engine/meter";
 import { createPitchShifter, type PitchShifter } from "@/lib/engine/pitchShifter";
 import { formatSemitones } from "@/lib/engine/theory";
+import { STRETCH_MODULE_URL } from "@/lib/vendor";
 
 /**
  * Feasibility check for approach A (see docs/PLAN.md). Nothing here can be
@@ -46,6 +47,16 @@ const QUESTIONS = [
 ] as const;
 
 type QuestionId = (typeof QUESTIONS)[number]["id"];
+
+/** A worklet that never reports ready would otherwise leave the page waiting forever. */
+const STAGE_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${ms / 1000}초 동안 응답 없음`)), ms)),
+  ]);
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -132,6 +143,7 @@ export default function CaptureDebugPage() {
   );
   const [peakInputDb, setPeakInputDb] = useState(SILENCE_DB);
   const [copied, setCopied] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
 
   const inputDb = useLevel(session?.inputAnalyser ?? null);
   const outputDb = useLevel(session?.outputAnalyser ?? null);
@@ -161,35 +173,56 @@ export default function CaptureDebugPage() {
     setProbe(null);
     setTrackEnded(false);
     setPeakInputDb(SILENCE_DB);
+    setSettings(null);
+    setLatency(null);
 
     // Created inside the click so autoplay policy lets it run.
     const context = new AudioContext({ latencyHint: "interactive" });
+    let stream: MediaStream | null = null;
+    let currentStage = "캡처 요청";
+    const enter = (name: string) => {
+      currentStage = name;
+      setStage(name);
+    };
     try {
-      const { stream, audioTrack, settings } = await captureTabAudio(target);
+      enter("캡처 요청");
+      const captured = await captureTabAudio(target);
+      stream = captured.stream;
+      setSettings(captured.settings);
       if (dropVideoTrack) stream.getVideoTracks().forEach((track) => track.stop());
-      audioTrack.addEventListener("ended", () => setTrackEnded(true));
+      captured.audioTrack.addEventListener("ended", () => setTrackEnded(true));
 
+      enter("오디오 그래프 구성");
       const source = context.createMediaStreamSource(stream);
       const inputAnalyser = new AnalyserNode(context, { fftSize: 2048 });
-      const shifter = await createPitchShifter(context);
+      source.connect(inputAnalyser);
+
+      enter("피치 시프터 로딩");
+      const shifter = await withTimeout(createPitchShifter(context, STRETCH_MODULE_URL), STAGE_TIMEOUT_MS);
       const outputAnalyser = new AnalyserNode(context, { fftSize: 2048 });
       // Starts muted: in "self" mode our output may be recaptured and howl.
       const outputGain = new GainNode(context, { gain: 0 });
-
-      source.connect(inputAnalyser);
       source.connect(shifter.input);
       shifter.output.connect(outputAnalyser);
       shifter.output.connect(outputGain).connect(context.destination);
 
-      const next = { context, stream, audioTrack, inputAnalyser, outputAnalyser, outputGain, shifter };
+      const next = { context, stream, audioTrack: captured.audioTrack, inputAnalyser, outputAnalyser, outputGain, shifter };
       sessionRef.current = next;
       setSession(next);
-      setSettings(settings);
       setSemitones(0);
-      setLatency(await shifter.latency());
+
+      enter("지연 측정");
+      setLatency(await withTimeout(shifter.latency(), STAGE_TIMEOUT_MS));
+      enter("완료");
     } catch (error) {
-      void context.close();
-      setCaptureError(error instanceof CaptureError ? error.message : String(error));
+      console.error(`[keytube] ${currentStage} 실패`, error);
+      // Without this a failure after capture leaves the tab silenced with nothing playing.
+      if (!sessionRef.current) {
+        stream?.getTracks().forEach((track) => track.stop());
+        void context.close();
+      }
+      const message = error instanceof CaptureError ? error.message : String(error);
+      setCaptureError(`${currentStage} 단계에서 실패: ${message}`);
     }
   }, [stop, target, dropVideoTrack]);
 
@@ -241,6 +274,8 @@ export default function CaptureDebugPage() {
       `KeyTube 캡처 검증 결과`,
       `브라우저: ${navigator.userAgent}`,
       `캡처 대상: ${target === "self" ? "이 탭" : "다른 탭"} / 비디오 트랙 ${dropVideoTrack ? "중지함" : "유지"}`,
+      `진행 단계: ${stage ?? "시작 안 함"}`,
+      `오류: ${captureError ?? "없음"}`,
       `트랙 설정: ${JSON.stringify(settings)}`,
       `오디오 트랙 종료됨: ${trackEnded ? "예" : "아니오"}`,
       `최대 입력 레벨: ${peakInputDb.toFixed(1)} dB`,
@@ -338,6 +373,7 @@ export default function CaptureDebugPage() {
             중지
           </button>
         </div>
+        {stage && <p className="text-xs text-neutral-500">진행 단계: {stage}</p>}
         {captureError && <p className="text-sm text-red-400">{captureError}</p>}
         {session && (
           <>

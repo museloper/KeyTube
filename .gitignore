@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local claude notes (personal, not committed)
 CLAUDE.local.md
+
+# copied from node_modules by scripts/copy-vendor.mjs
+/public/vendor/

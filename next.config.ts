@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
   // subpath, or "" for a custom domain / user site) automatically — do not
   // hard-code a repo name here.
   basePath: process.env.PAGES_BASE_PATH,
+  // Files under public/ that are fetched by URL at runtime (not via import)
+  // don't get basePath added automatically, so expose it to client code.
+  env: {
+    NEXT_PUBLIC_BASE_PATH: process.env.PAGES_BASE_PATH ?? "",
+  },
   // Static export has no server to run the Image Optimization API, and
   // playlist thumbnails come from i.ytimg.com (an external, unpredictable
   // set of video ids) so a custom loader isn't worth it — serve as-is.

@@ -25,22 +25,24 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 
 - **YouTube IFrame API에는 피치 조절이 없다.** 배속(`setPlaybackRate`)뿐이다. iframe은 cross-origin이라 Web Audio로 소리를 직접 가져올 수도 없다. 그래서 키 조절·판별은 `getDisplayMedia` 탭 오디오 캡처(A)로만 가능하다.
 - **A는 데스크톱 Chrome/Edge 전용.** iOS·Android 브라우저는 탭 오디오 캡처를 지원하지 않는다 — 모바일은 파일 업로드(C)로 대응한다.
-- **자기 탭을 캡처하면 우리 출력도 같은 탭 소리라서, 원음 차단(`suppressLocalAudioPlayback`) 시 같이 꺼지거나 다시 캡처될 가능성이 있다.** `restrictOwnAudio`는 시스템 오디오 캡처에만 적용되고 탭 캡처에는 효과가 없다. 이게 실제로 어떤지는 `/debug`의 피드백 테스트로 확인한다 — 결과에 따라 "플레이어를 별도 탭에 두는" 구조로 갈 수 있다. (결과는 `docs/decisions.md`에 기록할 것)
+- **자기 탭 캡처는 쓸 수 없다 (실측 확인).** 우리 AudioContext 출력도 같은 탭 소리라서 원음 차단에 같이 걸려 안 들리고, 동시에 재캡처돼 하울링 루프가 된다. `restrictOwnAudio`는 시스템 오디오 캡처에만 적용되어 탭 캡처에는 효과가 없다. **캡처하는 탭과 소리를 내는 탭은 반드시 달라야 한다.** 다른 탭 캡처는 동작 확인됨. (수치: `docs/decisions.md`)
 - **피치 시프트는 지연이 생긴다.** 영상과 소리가 약간 어긋난다 — `/debug`에 실측 지연이 표시된다.
 
 ## 라이브러리 선택
 
-- 피치 시프트: **`signalsmith-stretch`** (MIT, WASM+AudioWorklet, 라이브 입력 지원). 타입이 없어 `src/lib/engine/signalsmith-stretch.d.ts`로 선언했다. 모듈이 WASM과 AudioWorklet을 건드리므로 반드시 **동적 import**(`pitchShifter.ts`) — 정적 import하면 정적 export의 prerender에서 깨질 수 있다.
+- 피치 시프트: **`signalsmith-stretch`** (MIT, WASM+AudioWorklet, 라이브 입력 지원, 지연 120 ms). 타입이 없어 `src/lib/engine/signalsmith-stretch.d.ts`로 선언했다.
+  - **절대 `import "signalsmith-stretch"`로 번들에 넣지 말 것.** 자기 소스를 문자열로 worklet에 넘기는데 Turbopack의 치환 코드가 worklet 안에서 ReferenceError를 내고, 오류 없이 영원히 멈춘다. `scripts/copy-vendor.mjs`가 `predev`/`prebuild`에서 `public/vendor/`로 복사하고(gitignore됨), `createPitchShifter(context, STRETCH_MODULE_URL)`이 `webpackIgnore` 동적 import로 불러온다. 패키지를 올리면 이 복사본도 자동으로 따라간다. (경위: `docs/decisions.md`)
 - **GPL 라이브러리(Rubber Band 등)는 쓰지 않는다.**
 
 ## 테스트가 못 검증하는 것
 
-`npx vitest run`은 순수 로직(`theory`, `meter`, `parseUrl`)만 검증한다. **탭 캡처, 원음 차단, 피치 시프트 음질·지연은 이 세션 환경에서 실기기 검증이 불가능하다** — 사람이 데스크톱 Chrome에서 `/debug`를 돌리고 "결과 복사"로 전달해야 한다.
+`npx vitest run`은 순수 로직(`theory`, `meter`, `parseUrl`)만 검증한다. 캡처·피치 시프트는 **로컬 Chrome(`/Applications/Google Chrome.app`)을 playwright-core로 headed 구동**하면 수치로 검증할 수 있다 — `--auto-accept-this-tab-capture`(이 탭) / `--auto-select-tab-capture-source-by-title=<제목>`(다른 탭)으로 공유 창을 자동 승인하고, `<audio>` 톤을 대조군으로 넣어 `/debug`의 레벨·피드백 테스트를 읽는다. **headless는 탭 오디오를 전혀 캡처하지 않아(무음) 판정이 무효다.** 실제 음질과 영상-소리 싱크 체감은 여전히 사람이 들어봐야 한다.
 
 ## 진행 단계
 
 - [x] 0. 스캐폴딩, 키 이론 모듈, `/debug` 캡처 검증 페이지
-- [ ] 1. `/debug` 실기기 검증 → A 구조 확정 (이 탭 vs 별도 플레이어 탭)
+- [x] 1. `/debug` 검증 — 이 탭 캡처 불가, 다른 탭 캡처 동작 확인
+- [ ] 1.5. 두 탭 구조의 화면 설계 확정
 - [ ] 2. 키 판별 (크로마 + Krumhansl 프로파일)
 - [ ] 3. 파일 업로드(C)로 엔진 완성
 - [ ] 4. 메인 화면에 A 연결
