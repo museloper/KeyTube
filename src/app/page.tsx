@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { EngineBar } from "@/components/EngineBar";
 import { KeyPanel } from "@/components/KeyPanel";
 import { Player } from "@/components/Player";
 import { UrlInput } from "@/components/UrlInput";
+import { useEngine } from "@/hooks/useEngine";
 import { usePlayer } from "@/hooks/usePlayer";
 import type { Key } from "@/lib/engine/theory";
 import { fetchVideoMeta, type VideoMeta } from "@/lib/youtube/oembed";
@@ -15,6 +16,7 @@ export default function Home() {
   const [meta, setMeta] = useState<VideoMeta | null>(null);
   const [originalKey, setOriginalKey] = useState<Key | null>(null);
   const [semitones, setSemitones] = useState(0);
+  const engine = useEngine(semitones);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5">
@@ -22,13 +24,6 @@ export default function Home() {
         <h1 className="text-lg font-bold tracking-tight">KeyTube</h1>
         <p className="text-xs text-neutral-500">유튜브 키 조절 · 키 판별</p>
       </header>
-
-      <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-300">
-        개발 중 — 실제 키 변경은 아직 연결 전이에요. 지금은 원키를 입력하면 바뀐 키만 계산해 보여줍니다.{" "}
-        <Link href="/debug" className="underline">
-          캡처 검증 페이지
-        </Link>
-      </p>
 
       <UrlInput
         onSubmit={(parsed) => {
@@ -50,6 +45,8 @@ export default function Home() {
           {meta.author && <span className="text-neutral-500"> · {meta.author}</span>}
         </p>
       )}
+
+      <EngineBar engine={engine} />
 
       <KeyPanel
         originalKey={originalKey}

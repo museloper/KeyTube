@@ -9,7 +9,7 @@ import { captureTabAudio, CaptureError, type CaptureTarget } from "@/lib/engine/
 import { binForFrequency, rmsDb, SILENCE_DB } from "@/lib/engine/meter";
 import { createPitchShifter, type PitchShifter } from "@/lib/engine/pitchShifter";
 import { formatSemitones } from "@/lib/engine/theory";
-import { STRETCH_MODULE_URL } from "@/lib/vendor";
+import { STRETCH_MODULE_URL } from "@/lib/paths";
 
 /**
  * Feasibility check for approach A (see docs/PLAN.md). Nothing here can be
@@ -311,7 +311,7 @@ export default function CaptureDebugPage() {
         <div className="flex flex-wrap gap-2">
           {(
             [
-              ["self", "이 탭 (플레이어가 이 페이지에)"],
+              ["self", "이 탭 (동작 안 함 — 기록용)"],
               ["other", "다른 탭 (플레이어를 새 탭에)"],
             ] as const
           ).map(([value, label]) => (

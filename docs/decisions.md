@@ -26,3 +26,9 @@
 - 증상: `/debug`에서 캡처 후 피치 시프터가 응답 없이 멈춤(오류도 없음). 번들 없이 원본 파일을 import하면 정상.
 - 원인: 이 라이브러리는 자기 함수 소스를 문자열로 만들어 AudioWorklet 모듈로 등록한다. Turbopack이 `typeof process == "object"`를 `typeof __TURBOPACK__imported__module__…["default"] == "object"`로 바꿔 넣는데, worklet 안에는 그 변수가 없어 **ReferenceError**가 나고, 라이브러리가 이를 삼켜 'ready'를 영영 보내지 않는다.
 - 해결: `scripts/copy-vendor.mjs`가 `predev`/`prebuild`에서 원본을 `public/vendor/`로 복사하고, `createPitchShifter(context, moduleUrl)`이 `import(/* webpackIgnore: true */ url)`로 런타임에 불러온다. URL을 인자로 받는 건 엔진이 Next.js의 basePath를 몰라도 되게 하고, 확장(B)이 자기 경로를 넘길 수 있게 하기 위함.
+
+## 2026-10-19 — 화면 구조: 메인 탭 + 엔진 팝업
+
+- 후보: (1) 메인 탭(플레이어+컨트롤) + 소리를 내는 작은 엔진 팝업, (2) 컨트롤 탭 + 플레이어 팝업. 사용자가 (1)을 선택 — LoopTube처럼 영상과 컨트롤이 한 화면에 있는 게 핵심 UX라서.
+- 팝업은 최소화해도 되고, 닫으면 Chrome이 원음 차단을 풀어 원래 소리로 돌아가는 게 자연스러운 "끄기" 동작이 된다.
+- 자동 e2e(headed Chrome): 440 Hz 대조 톤 → 엔진 출력 원키 440.1 / +2 495.3 / −1 415.9 Hz. 메인 새로고침 후 재연결, 팝업 닫으면 메인이 "꺼짐"으로 전환 확인.
