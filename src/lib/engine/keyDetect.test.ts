@@ -44,7 +44,7 @@ const name = (candidate: { key: Parameters<typeof keyLabel>[0] } | undefined) =>
 describe("rankKeys", () => {
   it("picks the key whose own profile it is fed", () => {
     // The C major profile itself, rotated to E: should rank E major first with r = 1.
-    const cMajor = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+    const cMajor = [0.748, 0.06, 0.488, 0.082, 0.67, 0.46, 0.096, 0.715, 0.104, 0.366, 0.057, 0.4];
     const eMajor = Array.from({ length: 12 }, (_, i) => cMajor[(i - 4 + 12) % 12]!);
     const [best] = rankKeys(eMajor);
     expect(name(best)).toBe("E major");

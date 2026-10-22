@@ -3,13 +3,17 @@ import { pitchClass, type Key } from "./theory";
 /**
  * Key estimation from audio spectra: fold the spectrum into a 12-bin chroma
  * (energy per pitch class), accumulate it over the song, and correlate it
- * with the Krumhansl–Kessler key profiles for all 24 keys. Pure functions —
- * the caller supplies spectra (e.g. AnalyserNode.getFloatFrequencyData).
+ * with key profiles for all 24 keys. Pure functions — the caller supplies
+ * spectra (e.g. AnalyserNode.getFloatFrequencyData).
  */
 
-/** Krumhansl & Kessler (1982) probe-tone ratings, tonic first. */
-const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
-const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+/**
+ * Temperley's (2007) Kostka–Payne profiles, tonic first. Krumhansl–Kessler
+ * (1982) kept mistaking songs for their dominant key (G major → D major);
+ * see docs/decisions.md.
+ */
+const MAJOR_PROFILE = [0.748, 0.06, 0.488, 0.082, 0.67, 0.46, 0.096, 0.715, 0.104, 0.366, 0.057, 0.4];
+const MINOR_PROFILE = [0.712, 0.084, 0.474, 0.618, 0.049, 0.46, 0.105, 0.747, 0.404, 0.067, 0.133, 0.33];
 
 export interface KeyCandidate {
   key: Key;
@@ -101,6 +105,13 @@ export function chromaFromSpectrum(db: ArrayLike<number>, options: SpectrumOptio
   return chroma;
 }
 
+/** Chroma of one frame, or null if it's silence (loudest bin below `silenceDb`) or has nothing in range. */
+export function frameChroma(db: ArrayLike<number>, options: SpectrumOptions, silenceDb = -70): Float64Array | null {
+  let loudest = -Infinity;
+  for (let i = 0; i < db.length; i++) if (db[i]! > loudest) loudest = db[i]!;
+  return loudest < silenceDb ? null : chromaFromSpectrum(db, options);
+}
+
 /** How sure the estimate is, from how far the winner pulls ahead and how much was heard. */
 export function confidenceOf(candidates: KeyCandidate[], seconds: number): Confidence {
   const best = candidates[0]?.score ?? 0;
@@ -124,10 +135,7 @@ export class KeyEstimator {
   ) {}
 
   add(db: ArrayLike<number>): void {
-    let loudest = -Infinity;
-    for (let i = 0; i < db.length; i++) if (db[i]! > loudest) loudest = db[i]!;
-    if (loudest < this.silenceDb) return;
-    const chroma = chromaFromSpectrum(db, this.options);
+    const chroma = frameChroma(db, this.options, this.silenceDb);
     if (!chroma) return;
     for (let i = 0; i < 12; i++) this.sum[i] += chroma[i]!;
     this.frames++;
