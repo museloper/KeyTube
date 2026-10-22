@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { Confidence, KeyEstimate } from "@/lib/engine/keyDetect";
-import { formatSemitones, keyLabel, parseKey, relativeKey, transposeKey, type Key } from "@/lib/engine/theory";
+import type { Confidence } from "@/lib/engine/keyDetect";
+import type { SongKey } from "@/lib/engine/keySections";
+import { formatSemitones, keyLabel, parseKey, pitchClass, relativeKey, transposeKey, type Key } from "@/lib/engine/theory";
 
 export const MAX_SHIFT = 12;
 
@@ -10,7 +11,7 @@ const CONFIDENCE_LABEL: Record<Confidence, string> = { low: "낮음", medium: "�
 
 interface KeyPanelProps {
   /** From the engine; null when nothing has been heard (or the engine is off). */
-  estimate: KeyEstimate | null;
+  estimate: SongKey | null;
   /** Whether there is an engine listening at all, to explain an empty estimate. */
   listening: boolean;
   /** Set by the user; overrides the estimate. */
@@ -22,6 +23,12 @@ interface KeyPanelProps {
 }
 
 const sameKey = (a: Key, b: Key) => a.tonic === b.tonic && a.mode === b.mode;
+
+/** Interval from one tonic to another as the nearer way round: −5…+6. */
+const interval = (from: Key, to: Key) => {
+  const up = pitchClass(to.tonic - from.tonic);
+  return up > 6 ? up - 12 : up;
+};
 
 function KeyName({ value, caption }: { value: Key | null; caption: string }) {
   const label = value ? keyLabel(value) : null;
@@ -54,7 +61,13 @@ export function KeyPanel({
 
   const detected = estimate?.candidates[0]?.key ?? null;
   const originalKey = manualKey ?? detected;
-  const shifted = originalKey ? transposeKey(originalKey, semitones) : null;
+  // Later sections are key changes heard since; a manually corrected original key moves them by the same amount.
+  const changes = (estimate?.sections ?? []).slice(1).map((section) =>
+    originalKey && detected ? transposeKey({ ...originalKey, mode: section.key.mode }, interval(detected, section.key)) : section.key,
+  );
+  // Live, the last section is what's playing now.
+  const playingKey = changes.at(-1) ?? originalKey;
+  const shifted = playingKey ? transposeKey(playingKey, semitones) : null;
   const alternatives = (estimate?.candidates ?? [])
     .map((candidate) => candidate.key)
     .filter((key) => !originalKey || !sameKey(key, originalKey))
@@ -84,14 +97,36 @@ export function KeyPanel({
       <div className="flex items-center gap-2">
         <KeyName value={originalKey} caption={caption} />
         <span className="text-neutral-600">→</span>
-        <KeyName value={shifted} caption={`현재 (${formatSemitones(semitones)})`} />
+        <KeyName
+          value={shifted}
+          caption={`현재 (${formatSemitones(semitones)})${changes.length > 0 ? " · 전조 구간" : ""}`}
+        />
       </div>
+
+      {changes.length > 0 && originalKey && (
+        <ul className="flex flex-col gap-1 rounded-lg bg-neutral-950 px-3 py-2 text-xs">
+          {changes.map((key, i) => {
+            const now = i === changes.length - 1;
+            return (
+              <li key={i} className={`flex justify-between gap-2 ${now ? "text-violet-300" : "text-neutral-400"}`}>
+                <span>
+                  전조 감지 · {keyLabel(key).name} ({formatSemitones(interval(originalKey, key))})
+                </span>
+                <span className="font-mono">
+                  {semitones !== 0 && `→ ${keyLabel(transposeKey(key, semitones)).name}`}
+                  {now && " ◀ 지금"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <p className="text-center text-xs text-neutral-500">
         {manualKey
           ? null
           : estimate
-            ? `${Math.round(estimate.seconds)}초 분석 · 오래 들을수록 정확해져요`
+            ? `처음 들은 ${Math.round(estimate.seconds)}초로 분석 · 처음부터 들을수록 정확해요`
             : listening
               ? "원키 분석 중 — 음악을 재생하세요"
               : "키 조절을 켜면 원키를 자동으로 찾아요"}

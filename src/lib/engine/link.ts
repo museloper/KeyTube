@@ -1,4 +1,4 @@
-import type { KeyEstimate } from "./keyDetect";
+import type { SongKey } from "./keySections";
 
 /**
  * Messages between the main tab (player + controls) and the engine tab
@@ -23,8 +23,8 @@ export type ToEngine =
 
 export type FromEngine =
   | { type: "status"; state: EngineState; latencyMs: number | null; error: string | null }
-  /** Running estimate of the original key; null until something has been heard. */
-  | { type: "key"; estimate: KeyEstimate | null }
+  /** Running estimate of the original key and any key change since; null until something has been heard. */
+  | { type: "key"; estimate: SongKey | null }
   /** Sent when the engine tab is closing. */
   | { type: "bye" };
 

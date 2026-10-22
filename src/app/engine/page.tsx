@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CaptureError } from "@/lib/engine/capture";
-import type { KeyEstimate } from "@/lib/engine/keyDetect";
+import type { SongKey } from "@/lib/engine/keySections";
 import { trackKey, type KeyTracker } from "@/lib/engine/keyTracker";
 import { openEngineLink, type EngineState, type FromEngine, type Link } from "@/lib/engine/link";
 import { startCaptureSession, type CaptureSession } from "@/lib/engine/session";
@@ -19,7 +19,7 @@ export default function EnginePage() {
   const sessionRef = useRef<CaptureSession | null>(null);
   const trackerRef = useRef<KeyTracker | null>(null);
   /** Last estimate, replayed to a main tab that reconnects. */
-  const keyRef = useRef<KeyEstimate | null>(null);
+  const keyRef = useRef<SongKey | null>(null);
   /** The main tab's latest request, applied as soon as a session exists. */
   const semitonesRef = useRef(0);
 
@@ -28,7 +28,7 @@ export default function EnginePage() {
   const [error, setError] = useState<string | null>(null);
   const [semitones, setSemitones] = useState(0);
   const [starting, setStarting] = useState(false);
-  const [estimate, setEstimate] = useState<KeyEstimate | null>(null);
+  const [estimate, setEstimate] = useState<SongKey | null>(null);
 
   // Mirror into a ref so the channel handler always reports the current status.
   const statusRef = useRef<FromEngine>({ type: "status", state, latencyMs, error });

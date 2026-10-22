@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isCaptureSupported } from "@/lib/engine/capture";
-import type { KeyEstimate } from "@/lib/engine/keyDetect";
+import type { SongKey } from "@/lib/engine/keySections";
 import { openControllerLink, type Link, type ToEngine } from "@/lib/engine/link";
 import { ENGINE_PAGE_URL } from "@/lib/paths";
 
@@ -13,7 +13,7 @@ export interface UseEngineResult {
   latencyMs: number | null;
   error: string | null;
   /** The engine's running guess at the original key; null until it has heard something. */
-  keyEstimate: KeyEstimate | null;
+  keyEstimate: SongKey | null;
   /** A different song started: make the engine forget what it has heard. */
   resetKey: () => void;
   /** False on mobile and non-Chromium browsers: tab audio capture isn't available. */
@@ -38,7 +38,7 @@ export function useEngine(semitones: number): UseEngineResult {
   const [status, setStatus] = useState<EngineStatus>("off");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [keyEstimate, setKeyEstimate] = useState<KeyEstimate | null>(null);
+  const [keyEstimate, setKeyEstimate] = useState<SongKey | null>(null);
   const [supported, setSupported] = useState(true);
 
   useEffect(() => {

@@ -8,7 +8,7 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 
 | 경로 | 역할 |
 |---|---|
-| `src/lib/engine/` | **프레임워크 무관 오디오 엔진** — 키 이론(`theory.ts`), 탭 캡처(`capture.ts`), 피치 시프트(`pitchShifter.ts`), 캡처→시프트→출력 묶음(`session.ts`), 메인↔엔진 탭 메시지(`link.ts`), 키 판별(`keyDetect.ts` 순수 로직 + `keyTracker.ts` 분석기 샘플링), 레벨 계산(`meter.ts`) |
+| `src/lib/engine/` | **프레임워크 무관 오디오 엔진** — 키 이론(`theory.ts`), 탭 캡처(`capture.ts`), 피치 시프트(`pitchShifter.ts`), 캡처→시프트→출력 묶음(`session.ts`), 메인↔엔진 탭 메시지(`link.ts`), 키 판별(`keyDetect.ts` 크로마·상관 + `keySections.ts` 구간·전조 + `keyTracker.ts` 분석기 샘플링), 레벨 계산(`meter.ts`) |
 | `src/lib/youtube/` | IFrame API 로더·타입·URL 파서·oEmbed (LoopTube에서 복사) |
 | `src/hooks/usePlayer.ts` / `useEngine.ts` | YouTube 플레이어 생성·로드 / 엔진 탭 열기·상태·반음 전달 |
 | `src/components/` | 화면 부품 (`KeyPanel`, `EngineBar`, `UrlInput`, `Player`) |
@@ -37,8 +37,9 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 ## 키 판별
 
 - 엔진 탭이 캡처한 소리를 **피치 시프트 전에** 분석한다(`session.ts`의 `inputAnalyser`). 시프트 후 소리를 분석하면 ± 누를 때마다 "원키"가 따라 움직인다.
-- 100 ms마다 스펙트럼(fftSize 16384)을 12음 크로마로 접어 곡 전체에 누적하고, **Temperley(Kostka–Payne)** 24개 조 프로파일과 상관계수로 순위를 매긴다(Krumhansl–Kessler는 딸림조 혼동이 잦아 교체, `docs/decisions.md`). 1초마다 상위 4개 후보를 메인 탭에 보낸다. 새 영상을 불러오면 `resetKey`로 누적을 비운다.
-- **관계조(C major ↔ A minor)·딸림조 혼동은 이 방식의 본질적 한계**라 UI가 "다른 후보" 칩과 직접 지정(`manualKey`가 자동 판별보다 우선)을 제공한다. 정확도를 더 올리고 싶으면 essentia.js나 구간별 판별(전조 대응)을 검토 — 판별 로직은 `keyDetect.test.ts`의 합성 화음 테스트로 회귀를 잡는다.
+- 100 ms마다 스펙트럼(fftSize 16384)을 12음 크로마로 접어 **들은 음악 8초 단위 창**으로 모으고(무음 프레임은 세지 않아 일시정지가 구간을 쪼개지 않음), `keySections`가 창마다 **Temperley(Kostka–Payne)** 24개 조 프로파일과 상관을 낸 뒤 Viterbi로 구간을 나눈다(20초 미만은 앞 구간에 합침). **원키 = 처음 들은 구간의 키**, 이후 구간은 "전조 감지"로 표시하고 마지막 구간을 '현재 키'로 쓴다. 전체를 평균하면 전조(G→A) 사이의 키(D)로 기운다. Krumhansl–Kessler는 딸림조 혼동이 잦아 교체(`docs/decisions.md`). 1초마다 메인 탭에 보낸다.
+- **한계**: 곡 위치가 아니라 들은 순서 기준이다. 중간부터 들으면 원키가 그 부분 키가 되고, 앞뒤로 건너뛰면 전조처럼 보일 수 있다 — 직접 지정으로 보정. 새 영상을 불러오면 `resetKey`로 누적을 비운다.
+- **관계조(C major ↔ A minor)·딸림조 혼동은 이 방식의 본질적 한계**라 UI가 "다른 후보" 칩과 직접 지정(`manualKey`가 자동 판별보다 우선)을 제공한다. 정확도를 더 올리고 싶으면 essentia.js를 검토 — 판별 로직은 `keyDetect.test.ts`의 합성 화음 테스트로 회귀를 잡는다.
 - 엔진 탭은 소리를 내는 탭이라 Chrome 백그라운드 타이머 제한에서 제외된다 — 그래서 `setInterval` 샘플링이 백그라운드에서도 돈다.
 
 ## 플랫폼 제약 (버그 아님)
