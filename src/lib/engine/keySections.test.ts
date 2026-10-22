@@ -34,6 +34,32 @@ describe("songKeyFromWindows", () => {
     expect(result.seconds).toBeCloseTo(64, 6);
   });
 
+  const heardFor = (windows: unknown[]) => Array(windows.length).fill(80);
+
+  it("shows a new key as pending before it's long enough to be a section", () => {
+    const windows = [...Array(8).fill(window(7)), window(9), window(9)];
+    const result = songKeyFromWindows(windows, heardFor(windows), 8, 0.1, 80)!;
+    expect(result.sections.map((s) => keyLabel(s.key).name)).toEqual(["G major"]);
+    expect(result.pending && names([result.pending])).toEqual(["64 A major"]);
+  });
+
+  it("confirms a pending key once it's long enough, and stops calling it pending", () => {
+    const windows = [...Array(8).fill(window(7)), ...Array(3).fill(window(9))];
+    const result = songKeyFromWindows(windows, heardFor(windows), 8, 0.1, 88)!;
+    expect(result.sections.map((s) => keyLabel(s.key).name)).toEqual(["G major", "A major"]);
+    expect(result.pending).toBeNull();
+  });
+
+  it("doesn't call a new key pending until it's lasted a moment", () => {
+    const windows = [...Array(8).fill(window(7)), window(9)];
+    expect(songKeyFromWindows(windows, heardFor(windows), 8, 0.1, 72)!.pending).toBeNull();
+  });
+
+  it("doesn't call anything pending before the opening key has settled", () => {
+    const windows = [window(7), window(9), window(9)];
+    expect(songKeyFromWindows(windows, heardFor(windows), 8, 0.1, 24)!.pending).toBeNull();
+  });
+
   it("is null when nothing has been heard", () => {
     expect(songKeyFromWindows([new Float64Array(12)], [0], 8, 0.1, 0)).toBeNull();
   });

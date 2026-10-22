@@ -62,9 +62,11 @@ export function KeyPanel({
   const detected = estimate?.candidates[0]?.key ?? null;
   const originalKey = manualKey ?? detected;
   // Later sections are key changes heard since; a manually corrected original key moves them by the same amount.
-  const changes = (estimate?.sections ?? []).slice(1).map((section) =>
-    originalKey && detected ? transposeKey({ ...originalKey, mode: section.key.mode }, interval(detected, section.key)) : section.key,
-  );
+  const corrected = (key: Key) =>
+    originalKey && detected ? transposeKey({ ...originalKey, mode: key.mode }, interval(detected, key)) : key;
+  const changes = (estimate?.sections ?? []).slice(1).map((section) => corrected(section.key));
+  // A new key heard too briefly to confirm: listed, but not used as the current key until it is.
+  const pending = estimate?.pending ? corrected(estimate.pending.key) : null;
   // Live, the last section is what's playing now.
   const playingKey = changes.at(-1) ?? originalKey;
   const shifted = playingKey ? transposeKey(playingKey, semitones) : null;
@@ -103,22 +105,33 @@ export function KeyPanel({
         />
       </div>
 
-      {changes.length > 0 && originalKey && (
+      {(changes.length > 0 || pending) && originalKey && (
         <ul className="flex flex-col gap-1 rounded-lg bg-neutral-950 px-3 py-2 text-xs">
           {changes.map((key, i) => {
-            const now = i === changes.length - 1;
+            const now = !pending && i === changes.length - 1;
             return (
               <li key={i} className={`flex justify-between gap-2 ${now ? "text-violet-300" : "text-neutral-400"}`}>
                 <span>
                   전조 감지 · {keyLabel(key).name} ({formatSemitones(interval(originalKey, key))})
                 </span>
-                <span className="font-mono">
-                  {semitones !== 0 && `→ ${keyLabel(transposeKey(key, semitones)).name}`}
-                  {now && " ◀ 지금"}
+                <span className="flex gap-2">
+                  {semitones !== 0 && <span className="font-mono">→ {keyLabel(transposeKey(key, semitones)).name}</span>}
+                  {now && <span>재생 중</span>}
                 </span>
               </li>
             );
           })}
+          {pending && (
+            <li className="flex justify-between gap-2 text-violet-300/60">
+              <span>
+                전조 가능성 · {keyLabel(pending).name} ({formatSemitones(interval(originalKey, pending))})
+              </span>
+              <span className="flex gap-2">
+                {semitones !== 0 && <span className="font-mono">→ {keyLabel(transposeKey(pending, semitones)).name}</span>}
+                <span>재생 중 · 확인 중</span>
+              </span>
+            </li>
+          )}
         </ul>
       )}
 
