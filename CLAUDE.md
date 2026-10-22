@@ -38,7 +38,9 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 
 - 엔진 탭이 캡처한 소리를 **피치 시프트 전에** 분석한다(`session.ts`의 `inputAnalyser`). 시프트 후 소리를 분석하면 ± 누를 때마다 "원키"가 따라 움직인다.
 - 100 ms마다 스펙트럼(fftSize 16384)을 12음 크로마로 접어 **들은 음악 8초 단위 창**으로 모으고(무음 프레임은 세지 않아 일시정지가 구간을 쪼개지 않음), `keySections`가 창마다 **Temperley(Kostka–Payne)** 24개 조 프로파일과 상관을 낸 뒤 Viterbi로 구간을 나눈다(20초 미만은 앞 구간에 합침). **원키 = 처음 들은 구간의 키**, 이후 구간은 "전조 감지"로 표시하고 마지막 구간을 '현재 키'로 쓴다. 전체를 평균하면 전조(G→A) 사이의 키(D)로 기운다. Krumhansl–Kessler는 딸림조 혼동이 잦아 교체(`docs/decisions.md`). 1초마다 메인 탭에 보낸다.
-- **한계**: 곡 위치가 아니라 들은 순서 기준이다. 중간부터 들으면 원키가 그 부분 키가 되고, 앞뒤로 건너뛰면 전조처럼 보일 수 있다 — 직접 지정으로 보정. 새 영상을 불러오면 `resetKey`로 누적을 비운다.
+- **한계**: 곡 위치가 아니라 들은 순서 기준이다. 중간부터 들으면 원키가 그 부분 키가 되고, 앞뒤로 건너뛰면 전조처럼 보일 수 있다 — 직접 지정으로 보정.
+- 상수(창 8초, 전조 벌점 0.6, 최소 구간 20초)와 프로파일 선택의 근거는 키를 아는 실제 팝 9곡 비교다(`docs/decisions.md`). 그 크로마 데이터는 곡 음원에서 뽑은 값이라 **이 저장소에 없다** — 바꿀 때는 합성 테스트로 회귀를 잡고 실제 곡은 사람이 들어보며 확인할 것.
+- **아직 사람이 확인 안 한 것**: 실제 YouTube 탭 캡처 상태에서 "전조 감지" 표시가 제때 뜨는지(새 키를 20초 이상 들어야 뜬다). 새 영상을 불러오면 `resetKey`로 누적을 비운다.
 - **관계조(C major ↔ A minor)·딸림조 혼동은 이 방식의 본질적 한계**라 UI가 "다른 후보" 칩과 직접 지정(`manualKey`가 자동 판별보다 우선)을 제공한다. 정확도를 더 올리고 싶으면 essentia.js를 검토 — 판별 로직은 `keyDetect.test.ts`의 합성 화음 테스트로 회귀를 잡는다.
 - 엔진 탭은 소리를 내는 탭이라 Chrome 백그라운드 타이머 제한에서 제외된다 — 그래서 `setInterval` 샘플링이 백그라운드에서도 돈다.
 
@@ -58,7 +60,7 @@ YouTube 링크(또는 내 음원 파일)의 키를 반음 단위로 올리고 �
 
 ## 테스트가 못 검증하는 것
 
-`npx vitest run`은 순수 로직(`theory`, `meter`, `parseUrl`)만 검증한다. 캡처·피치 시프트는 **로컬 Chrome(`/Applications/Google Chrome.app`)을 playwright-core로 headed 구동**하면 수치로 검증할 수 있다 — `--auto-accept-this-tab-capture`(이 탭) / `--auto-select-tab-capture-source-by-title=<제목>`(다른 탭)으로 공유 창을 자동 승인하고, `<audio>` 톤을 대조군으로 넣어 `/debug`의 레벨·피드백 테스트를 읽는다. 엔진 탭의 실제 출력은 `AudioNode.prototype.connect`를 init script로 감싸 destination 앞에 분석기를 꽂아 주파수를 잰다. **자동 선택 플래그는 한글/특수문자 제목을 못 맞추므로** 테스트에서는 메인 탭 제목을 ASCII로 덮어쓸 것. **자동 선택 플래그는 공유 창 UI 자체를 건너뛰므로 공유 창에 무엇이 보이는지는 검증하지 못한다** — 플래그 없이 띄우고 macOS `screencapture -x`로 화면을 찍어 확인할 것 (빈 탭 목록 버그를 이렇게 놓쳤다).
+`npx vitest run`은 순수 로직만 검증한다: `theory`, `meter`, `parseUrl`, 키 판별(`keyDetect` 합성 화음, `keySections` 합성 크로마 창, `keyTracker`는 가짜 AnalyserNode + vitest 가짜 타이머로 전조 구간·일시정지·리셋). 캡처·피치 시프트는 **로컬 Chrome(`/Applications/Google Chrome.app`)을 playwright-core로 headed 구동**하면 수치로 검증할 수 있다 — `--auto-accept-this-tab-capture`(이 탭) / `--auto-select-tab-capture-source-by-title=<제목>`(다른 탭)으로 공유 창을 자동 승인하고, `<audio>` 톤을 대조군으로 넣어 `/debug`의 레벨·피드백 테스트를 읽는다. 엔진 탭의 실제 출력은 `AudioNode.prototype.connect`를 init script로 감싸 destination 앞에 분석기를 꽂아 주파수를 잰다. **자동 선택 플래그는 한글/특수문자 제목을 못 맞추므로** 테스트에서는 메인 탭 제목을 ASCII로 덮어쓸 것. **자동 선택 플래그는 공유 창 UI 자체를 건너뛰므로 공유 창에 무엇이 보이는지는 검증하지 못한다** — 플래그 없이 띄우고 macOS `screencapture -x`로 화면을 찍어 확인할 것 (빈 탭 목록 버그를 이렇게 놓쳤다).
 - 반음 변경은 0.3초 안팎에 반영된다. FFT로 잴 때는 분석 창 길이(fftSize/sampleRate)만큼 이전 소리가 섞이니, 한 번 읽고 판정하지 말고 목표 주파수에 도달할 때까지 폴링할 것. **headless는 탭 오디오를 전혀 캡처하지 않아(무음) 판정이 무효다.** 실제 음질과 영상-소리 싱크 체감은 여전히 사람이 들어봐야 한다.
 
 ## 진행 단계
